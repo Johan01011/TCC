@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perfil de Usuario</title>
+    <link rel="stylesheet" href="Perfil.css">
+</head>
+<body>
+    <div class="sidebar">
+        <a href="Tienda.html" class="circular-button">
+            <img src="image/Casita.png" alt="Tienda" />
+        </a>        
+        <h2>Hola!</h2>
+        <div class="menu-item" onclick="showSection('perfil')">Mi Perfil</div>
+        <div class="menu-item" onclick="showSection('pedidos')">Pedidos</div>
+        <div class="menu-item" onclick="logout()">Salir</div>
+    </div>
+    <div class="content">
+        <div id="perfil" class="section active">
+            <h3>Mi Perfil Meds a Domicilio</h3>
+            <p>Aquí puedes actualizar tus datos personales.</p>
+            <div class="field">
+                <label for="nombre-usuario">Nombre de usuario</label>
+                <input type="text" id="nombre-usuario" disabled>
+                <p class="error-message" id="nombre-error"></p>
+            </div>
+            <div class="field">
+                <label for="contrasena">Contraseña</label>
+                <input type="password" id="contrasena" disabled>
+                <p class="error-message" id="contrasena-error"></p>
+            </div>
+            <div class="field">
+                <label for="email">Correo electrónico</label>
+                <input type="email" id="email" disabled>
+            </div>
+            <div class="field">
+                <label for="telefono">Teléfono</label>
+                <input type="tel" id="telefono" disabled>
+                <p class="error-message" id="telefono-error"></p>
+            </div>
+            <div class="field">
+                <label for="direccion-envio">Dirección de envío</label>
+                <input type="text" id="direccion-envio" disabled>
+            </div>
+            <button id="editar-perfil" onclick="openEditProfileModal()">Editar Perfil</button>
+            <button id="actualizar-datos" style="display: none;" onclick="validateAndUpdateProfile()">Actualizar Datos</button>
+            <button id="borrar-cuenta" onclick="confirmDeleteAccount()">Borrar Cuenta</button>
+        </div>
+        <div id="pedidos" class="section">
+            <h3>Historial de Pedidos</h3>
+            <p>Aquí puedes ver tus pedidos.</p>
+            <table id="tabla-pedidos">
+                <thead>
+                    <tr>
+                        <th>Productos</th>
+                        <th>Subtotal</th>
+                        <th>Estado</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Las filas se insertarán dinámicamente con JavaScript -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Modal para mostrar detalles del producto -->
+        <div id="modal-productos" style="display: none;">
+            <h3>Detalles del Pedido</h3>
+            <div id="productos-detalle"></div>
+            <button onclick="closeModal()">Cerrar</button>
+        </div>
+        
+        <!-- Modal para confirmación de contraseña -->
+        <div id="confirmacion-modal" style="display: none;">
+            <p>Para editar el perfil, por favor ingresa tu contraseña:</p>
+            <input type="password" id="confirmacion-contrasena">
+            <button onclick="confirmEdit()">Confirmar</button>
+            <button onclick="closeModal()">Cancelar</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Debes iniciar sesión para acceder al perfil.');
+                window.location.href = 'login.html';
+            } else {
+                fetchUserData(token);
+                fetchPedidos();
+            }
+        });
+
+        function fetchUserData(token) {
+            fetch('http://localhost:3000/user', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('nombre-usuario').value = data.username;
+                document.getElementById('email').value = data.email;
+                document.getElementById('telefono').value = data.phone;
+                document.getElementById('direccion-envio').value = data.address;
+            })
+            .catch(error => alert('Error al cargar los datos del perfil: ' + error.message));
+        }
+
+        function fetchPedidos() {
+            const token = localStorage.getItem('token');
+
+            fetch('http://localhost:3000/pedidos', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(response => response.json())
+            .then(pedidos => {
+                const tablaPedidos = document.getElementById('tabla-pedidos').getElementsByTagName('tbody')[0];
+                tablaPedidos.innerHTML = ''; // Limpia la tabla antes de agregar filas
+
+                pedidos.forEach(pedido => {
+                    const row = tablaPedidos.insertRow();
+                    
+                    // Crear celdas para los datos
+                    const cellProductos = row.insertCell(0);
+                    const cellSubtotal = row.insertCell(1);
+                    const cellEstado = row.insertCell(2);
+                    const cellFecha = row.insertCell(3);
+                    
+                    // Botón de productos
+                    const buttonProductos = document.createElement('button');
+                    buttonProductos.innerText = 'Productos';
+                    buttonProductos.onclick = () => showProductDetails(pedido.productos);
+                    cellProductos.appendChild(buttonProductos);
+                    
+                    // Subtotal
+                    cellSubtotal.innerText = '$' + pedido.precio_total;
+                    
+                    // Estado de la compra
+                    cellEstado.innerText = pedido.estado_compra;
+                    
+                    // Fecha
+                    const fecha = new Date(pedido.fecha);
+                    cellFecha.innerText = fecha.toLocaleString();
+                });
+            })
+            .catch(error => alert('Error al obtener los pedidos: ' + error.message));
+        }
+
+        function showProductDetails(productos) {
+            const modal = document.getElementById('modal-productos');
+            const detalleProductos = document.getElementById('productos-detalle');
+            
+            detalleProductos.innerHTML = `
+    <h4>Productos comprados</h4>
+    <div class="productos-container">
+        ${productos.map(p => `
+            <div class="producto-item">
+                <img src="${p.imagen}" alt="${p.nombre_producto}" class="producto-img">
+                <div class="producto-info">
+                    <h5>${p.nombre_producto}</h5>
+                    <p>Cantidad: ${p.cantidad}</p>
+                    <p>Precio Unitario: $${p.precio}</p>
+                    <p>Total: $${p.precio_total}</p>
+                </div>
+            </div>
+        `).join('')}
+    </div>
+`;
+            
+            modal.style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('modal-productos').style.display = 'none';
+            document.getElementById('confirmacion-modal').style.display = 'none';
+        }
+
+        function showSection(sectionId) {
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.remove('active');
+            });
+            document.getElementById(sectionId).classList.add('active');
+            
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        function openEditProfileModal() {
+            document.getElementById('confirmacion-modal').style.display = 'block';
+        }
+
+        function confirmEdit() {
+            const password = document.getElementById('confirmacion-contrasena').value;
+            const token = localStorage.getItem('token');
+
+            fetch('http://localhost:3000/verify-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    enableProfileEditing();
+                    document.getElementById('confirmacion-modal').style.display = 'none';
+                } else {
+                    alert('Contraseña incorrecta.');
+                }
+            })
+            .catch(error => alert('Error al verificar la contraseña: ' + error.message));
+        }
+
+        function enableProfileEditing() {
+            ['nombre-usuario', 'contrasena', 'telefono', 'direccion-envio'].forEach(id => {
+                document.getElementById(id).disabled = false;
+            });
+            document.getElementById('editar-perfil').style.display = 'none';
+            document.getElementById('actualizar-datos').style.display = 'block';
+        }
+
+        function validateAndUpdateProfile() {
+        let isValid = true;
+
+    document.getElementById('nombre-error').textContent = '';
+    document.getElementById('contrasena-error').textContent = '';
+    document.getElementById('telefono-error').textContent = '';
+
+    const nombre = document.getElementById('nombre-usuario').value;
+    const contrasena = document.getElementById('contrasena').value;
+    const telefono = document.getElementById('telefono').value;
+
+    if (nombre.trim() === '') {
+        document.getElementById('nombre-error').textContent = 'El nombre no puede estar vacío.';
+        isValid = false;
+    }
+
+    if (contrasena.length < 6) {
+        document.getElementById('contrasena-error').textContent = 'La contraseña debe tener al menos 6 caracteres.';
+        isValid = false;
+    }
+
+    if (!/^\d{10}$/.test(telefono)) {
+        document.getElementById('telefono-error').textContent = 'El teléfono debe tener 10 dígitos.';
+        isValid = false;
+    }
+
+    if (!isValid) return;
+
+    const data = {
+        username: nombre,
+        password: contrasena,
+        phone: telefono,
+        address: document.getElementById('direccion-envio').value,
+    };
+
+    const token = localStorage.getItem('token');
+    fetch('http://localhost:3000/update-profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message === 'Perfil actualizado exitosamente') {
+            alert('Perfil actualizado correctamente.');
+            window.location.reload();
+        } else {
+            alert('Error al actualizar el perfil.');
+        }
+    })
+    .catch(error => alert('Error al actualizar el perfil: ' + error.message));
+}
+
+        function confirmDeleteAccount() {
+            if (confirm('¿Estás seguro de que deseas eliminar tu cuenta? Esta acción no se puede deshacer.')) {
+                const token = localStorage.getItem('token');
+                fetch('http://localhost:3000/delete-account', {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Cuenta eliminada con éxito.');
+                        localStorage.removeItem('token');
+                        window.location.href = 'login.html';
+                    } else {
+                        alert('Error al eliminar la cuenta.');
+                    }
+                })
+                .catch(error => alert('Error al eliminar la cuenta: ' + error.message));
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            alert('Has cerrado sesión.');
+            window.location.href = 'login.html';
+        }
+    </script>
+</body>
+</html>
